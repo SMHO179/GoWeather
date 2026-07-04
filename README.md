@@ -1,0 +1,2 @@
+# GoWeather
+golang project cli 
