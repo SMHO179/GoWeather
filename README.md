@@ -1,6 +1,4 @@
-حتماً 👍 این یک README کوتاه و تمیز برای پروژه‌ات:
 
-````md
 # 🌦 GoWeather
 
 A simple command-line weather tool written in Go.
