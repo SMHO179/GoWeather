@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultLocation = "Baku"
+	defaultLocation = "tehran"
 	weatherService  = "https://wttr.in"
 	requestTimeout  = 10 * time.Second
 )
