@@ -1,72 +1,69 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"flag"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
-	"time"
+
+	"github.com/SMHO179/GoWeather/internal/weather"
 )
-
-const (
-	defaultLocation = "tehran"
-	weatherService  = "https://wttr.in"
-	requestTimeout  = 10 * time.Second
-)
-
-var httpClient = &http.Client{
-	Timeout: requestTimeout,
-}
-
-func buildWeatherURL(location string) string {
-	return fmt.Sprintf("%s/%s?format=3", weatherService, location)
-}
-
-func fetchWeather(location string) (string, error) {
-	response, err := httpClient.Get(buildWeatherURL(location))
-	if err != nil {
-		return "", fmt.Errorf("failed to connect to weather service: %w", err)
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("weather service returned %s", response.Status)
-	}
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	return strings.TrimSpace(string(body)), nil
-}
-
-func getLocationFromArgs() string {
-	if len(os.Args) <= 1 {
-		return defaultLocation
-	}
-
-	location := strings.Join(os.Args[1:], " ")
-	location = strings.TrimSpace(location)
-
-	if location == "" {
-		return defaultLocation
-	}
-
-	return location
-}
 
 func main() {
-	location := getLocationFromArgs()
+	enableWindowsConsole()
 
-	weather, err := fetchWeather(location)
-	if err != nil {
+	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
 
-	fmt.Printf("Weather in %s\n", location)
-	fmt.Println("-------------------------")
-	fmt.Println(weather)
+func run(args []string) error {
+	flags := flag.NewFlagSet("weather", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+
+	timeout := flags.Duration("timeout", weather.DefaultTimeout, "request timeout (for example 5s or 30s)")
+	pause := flags.Bool("pause", false, "wait for Enter before exiting (useful when launched by double-click on Windows)")
+	flags.Usage = func() {
+		fmt.Fprintf(flags.Output(), "GoWeather - live weather from wttr.in\n\n")
+		fmt.Fprintf(flags.Output(), "Usage:\n  weather [flags] [location]\n\n")
+		fmt.Fprintf(flags.Output(), "Examples:\n  weather\n  weather London\n  weather \"New York\"\n  weather -timeout 5s Baku\n\nFlags:\n")
+		flags.PrintDefaults()
+	}
+
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+	if *timeout <= 0 {
+		return fmt.Errorf("timeout must be greater than zero")
+	}
+
+	location := weather.NormalizeLocation(strings.Join(flags.Args(), " "))
+
+	client := weather.NewClient()
+	client.HTTP.Timeout = *timeout
+
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+
+	line, err := client.Fetch(ctx, location)
+	if err == nil {
+		fmt.Printf("Weather in %s\n", location)
+		fmt.Println("-------------------------")
+		fmt.Println(line)
+	} else {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	}
+
+	if *pause {
+		fmt.Fprint(os.Stderr, "\nPress Enter to exit...")
+		fmt.Fscanln(os.Stdin)
+	}
+
+	return err
 }
