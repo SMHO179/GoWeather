@@ -671,7 +671,6 @@ func (a *app) messageLoop() int {
 
 func (a *app) cleanup() {
 	pKillTimer.Call(a.hwnd, timerID)
-	a.releaseStatic()
 	if a.memDC != 0 {
 		pDeleteDC.Call(a.memDC)
 		a.memDC = 0
